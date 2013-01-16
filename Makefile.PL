@@ -31,7 +31,7 @@ my %WriteMakefileArgs = (
     "Crypt::CBC" => 0,
     "Crypt::Rijndael" => 0,
     "Digest::SHA" => 0,
-    "MIME::Base64" => 0,
+    "MIME::Base64" => "3.12",
     "Math::Random::ISAAC::XS" => 0,
     "Moo" => 0,
     "MooX::Types::MooseLike::Base" => 0,
@@ -41,7 +41,7 @@ my %WriteMakefileArgs = (
     "strict" => 0,
     "warnings" => 0
   },
-  "VERSION" => "0.001",
+  "VERSION" => "0.002",
   "test" => {
     "TESTS" => "t/*.t"
   }

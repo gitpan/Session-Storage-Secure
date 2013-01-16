@@ -1,5 +1,11 @@
 Revision history for Session-Storage-Secure
 
+0.002     2013-01-15 23:06:47 America/New_York
+
+  [BUG FIXES]
+
+  - Specify MIME::Base64 3.12 as minimum for encode/decode_base64url
+
 0.001     2013-01-10 22:07:12 America/New_York
 
   - First release

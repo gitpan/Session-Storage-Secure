@@ -4,16 +4,16 @@ use warnings;
 
 package Session::Storage::Secure;
 # ABSTRACT: Encrypted, expiring, compressed, serialized session data with integrity
-our $VERSION = '0.001'; # VERSION
+our $VERSION = '0.002'; # VERSION
 
 use Carp                    (qw/croak/);
 use Crypt::CBC              ();
 use Crypt::Rijndael         ();
 use Digest::SHA             (qw/hmac_sha256/);
 use Math::Random::ISAAC::XS ();
-use MIME::Base64            (qw/encode_base64url decode_base64url/);
-use Sereal::Encoder         ();
-use Sereal::Decoder         ();
+use MIME::Base64 3.12 (qw/encode_base64url decode_base64url/);
+use Sereal::Encoder ();
+use Sereal::Decoder ();
 use namespace::clean;
 
 use Moo;
@@ -25,134 +25,134 @@ use MooX::Types::MooseLike::Base qw(:all);
 
 
 has secret_key => (
-  is       => 'ro',
-  isa      => Str,
-  required => 1,
+    is       => 'ro',
+    isa      => Str,
+    required => 1,
 );
 
 
 has default_duration => (
-  is        => 'ro',
-  isa       => Int,
-  predicate => 1,
+    is        => 'ro',
+    isa       => Int,
+    predicate => 1,
 );
 
 has _encoder => (
-  is      => 'lazy',
-  isa     => InstanceOf ['Sereal::Encoder'],
-  handles => { '_freeze' => 'encode' },
+    is      => 'lazy',
+    isa     => InstanceOf ['Sereal::Encoder'],
+    handles => { '_freeze' => 'encode' },
 );
 
 sub _build__encoder {
-  my ($self) = @_;
-  return Sereal::Encoder->new(
-    {
-      snappy         => 1,
-      croak_on_bless => 1,
-    }
-  );
+    my ($self) = @_;
+    return Sereal::Encoder->new(
+        {
+            snappy         => 1,
+            croak_on_bless => 1,
+        }
+    );
 }
 
 has _decoder => (
-  is      => 'lazy',
-  isa     => InstanceOf ['Sereal::Decoder'],
-  handles => { '_thaw' => 'decode' },
+    is      => 'lazy',
+    isa     => InstanceOf ['Sereal::Decoder'],
+    handles => { '_thaw' => 'decode' },
 );
 
 sub _build__decoder {
-  my ($self) = @_;
-  return Sereal::Decoder->new(
-    {
-      refuse_objects => 1,
-      validate_utf8  => 1,
-    }
-  );
+    my ($self) = @_;
+    return Sereal::Decoder->new(
+        {
+            refuse_objects => 1,
+            validate_utf8  => 1,
+        }
+    );
 }
 
 has _rng => (
-  is      => 'lazy',
-  isa     => InstanceOf ['Math::Random::ISAAC::XS'],
-  handles => { '_irand' => 'irand' },
+    is      => 'lazy',
+    isa     => InstanceOf ['Math::Random::ISAAC::XS'],
+    handles => { '_irand' => 'irand' },
 );
 
 sub _build__rng {
-  my ($self) = @_;
-  my ( $fh, @seeds );
-  if ( -r "/dev/random" ) {
-    open $fh, "<:raw", "/dev/random"
-      or warn "Could not open '/dev/random': $!";
-  }
-  if ($fh) {
-    my $buf = "";
-    while ( length $buf < 1024 ) {
-      sysread( $fh, $buf, 1024 - length $buf, length $buf );
+    my ($self) = @_;
+    my ( $fh, @seeds );
+    if ( -r "/dev/random" ) {
+        open $fh, "<:raw", "/dev/random"
+          or warn "Could not open '/dev/random': $!";
     }
-    @seeds = unpack( 'l*', $buf );
-  }
-  else {
-    @seeds = map { rand } 1 .. 256;
-  }
-  return Math::Random::ISAAC::XS->new(@seeds);
+    if ($fh) {
+        my $buf = "";
+        while ( length $buf < 1024 ) {
+            sysread( $fh, $buf, 1024 - length $buf, length $buf );
+        }
+        @seeds = unpack( 'l*', $buf );
+    }
+    else {
+        @seeds = map { rand } 1 .. 256;
+    }
+    return Math::Random::ISAAC::XS->new(@seeds);
 }
 
 
 sub encode {
-  my ( $self, $data, $expires ) = @_;
-  $data = {} unless defined $data;
+    my ( $self, $data, $expires ) = @_;
+    $data = {} unless defined $data;
 
-  # If expiration is set, we want to check it and possibly clear data;
-  # if not set, we might add an expiration based on default_duration
-  if ( defined $expires ) {
-    $data = {} if $expires < time;
-  }
-  else {
-    $expires = $self->has_default_duration ? time + $self->default_duration : "";
-  }
+    # If expiration is set, we want to check it and possibly clear data;
+    # if not set, we might add an expiration based on default_duration
+    if ( defined $expires ) {
+        $data = {} if $expires < time;
+    }
+    else {
+        $expires = $self->has_default_duration ? time + $self->default_duration : "";
+    }
 
-  # Random salt used to derive unique encryption/MAC key for each cookie
-  my $salt = $self->_irand;
-  my $key = hmac_sha256( $salt, $self->secret_key );
+    # Random salt used to derive unique encryption/MAC key for each cookie
+    my $salt = $self->_irand;
+    my $key = hmac_sha256( $salt, $self->secret_key );
 
-  # Encrypt the serialized data
-  my $cbc = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael' );
-  my $ciphertext =
-    eval { encode_base64url( $cbc->encrypt( $self->_freeze($data) ) ) };
-  croak "Encoding error: $@" if $@;
+    # Encrypt the serialized data
+    my $cbc = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael' );
+    my $ciphertext =
+      eval { encode_base64url( $cbc->encrypt( $self->_freeze($data) ) ) };
+    croak "Encoding error: $@" if $@;
 
-  # Calcualate MAC and assemble the result
-  my $mac = encode_base64url( hmac_sha256( "$expires~$ciphertext", $key ) );
+    # Calcualate MAC and assemble the result
+    my $mac = encode_base64url( hmac_sha256( "$expires~$ciphertext", $key ) );
 
-  return join( "~", $salt, $expires, $ciphertext, $mac );
+    return join( "~", $salt, $expires, $ciphertext, $mac );
 }
 
 
 sub decode {
-  my ( $self, $string ) = @_;
-  return unless length $string;
+    my ( $self, $string ) = @_;
+    return unless length $string;
 
-  # Having a string implies at least salt; expires is optional; rest required
-  my ( $salt, $expires, $ciphertext, $mac ) = split qr/~/, $string;
-  return unless length($ciphertext) && length($mac);
+    # Having a string implies at least salt; expires is optional; rest required
+    my ( $salt, $expires, $ciphertext, $mac ) = split qr/~/, $string;
+    return unless length($ciphertext) && length($mac);
 
-  # Check MAC integrity and expiration
-  my $key = hmac_sha256( $salt, $self->secret_key );
-  my $check_mac = encode_base64url( hmac_sha256( "$expires~$ciphertext", $key ) );
-  return unless $check_mac eq $mac;
-  return if length($expires) && $expires < time;
+    # Check MAC integrity and expiration
+    my $key = hmac_sha256( $salt, $self->secret_key );
+    my $check_mac = encode_base64url( hmac_sha256( "$expires~$ciphertext", $key ) );
+    return unless $check_mac eq $mac;
+    return if length($expires) && $expires < time;
 
-  # Decrypt and deserialize the data
-  my $cbc = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael' );
-  my $data;
-  eval { $self->_thaw( $cbc->decrypt( decode_base64url($ciphertext) ), $data ) };
-  croak "Decoding error: $@" if $@;
+    # Decrypt and deserialize the data
+    my $cbc = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael' );
+    my $data;
+    eval { $self->_thaw( $cbc->decrypt( decode_base64url($ciphertext) ), $data ) };
+    croak "Decoding error: $@" if $@;
 
-  return $data;
+    return $data;
 }
 
 1;
 
 
-# vim: ts=2 sts=2 sw=2 et:
+# vim: ts=4 sts=4 sw=4 et:
 
 __END__
 
@@ -164,7 +164,7 @@ Session::Storage::Secure - Encrypted, expiring, compressed, serialized session d
 
 =head1 VERSION
 
-version 0.001
+version 0.002
 
 =head1 SYNOPSIS
 

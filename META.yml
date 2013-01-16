@@ -29,13 +29,13 @@ no_index:
 provides:
   Session::Storage::Secure:
     file: lib/Session/Storage/Secure.pm
-    version: 0.001
+    version: 0.002
 requires:
   Carp: 0
   Crypt::CBC: 0
   Crypt::Rijndael: 0
   Digest::SHA: 0
-  MIME::Base64: 0
+  MIME::Base64: 3.12
   Math::Random::ISAAC::XS: 0
   Moo: 0
   MooX::Types::MooseLike::Base: 0
@@ -49,4 +49,4 @@ resources:
   bugtracker: https://github.com/dagolden/session-storage-secure/issues
   homepage: https://metacpan.org/release/Session-Storage-Secure
   repository: git://github.com/dagolden/session-storage-secure.git
-version: 0.001
+version: 0.002
