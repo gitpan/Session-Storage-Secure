@@ -4,7 +4,7 @@ use warnings;
 
 package Session::Storage::Secure;
 # ABSTRACT: Encrypted, expiring, compressed, serialized session data with integrity
-our $VERSION = '0.002'; # VERSION
+our $VERSION = '0.003'; # VERSION
 
 use Carp                    (qw/croak/);
 use Crypt::CBC              ();
@@ -78,9 +78,9 @@ has _rng => (
 sub _build__rng {
     my ($self) = @_;
     my ( $fh, @seeds );
-    if ( -r "/dev/random" ) {
-        open $fh, "<:raw", "/dev/random"
-          or warn "Could not open '/dev/random': $!";
+    if ( -r "/dev/urandom" ) {
+        open $fh, "<:raw", "/dev/urandom"
+          or warn "Could not open '/dev/urandom': $!";
     }
     if ($fh) {
         my $buf = "";
@@ -164,7 +164,7 @@ Session::Storage::Secure - Encrypted, expiring, compressed, serialized session d
 
 =head1 VERSION
 
-version 0.002
+version 0.003
 
 =head1 SYNOPSIS
 
@@ -249,7 +249,7 @@ Therefore, the session storage protocol used by this module is as follows:
     sk is a secret key shared by all servers
 
 The salt value is generated using L<Math::Random::ISAAC::XS>, seeded from
-C</dev/random>, if available, or from rand(), if not.
+C</dev/urandom>, if available, or from rand(), if not.
 
 The HMAC algorithm is C<hmac_sha256> from L<Digest::SHA>.  Encryption
 is done by L<Crypt::CBC> using L<Crypt::Rijndael> (AES).  The ciphertext and

@@ -12,7 +12,7 @@ build_requires:
 configure_requires:
   ExtUtils::MakeMaker: 6.30
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 4.300028, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Dist::Zilla version 4.300029, CPAN::Meta::Converter version 2.120921'
 license: apache
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -29,7 +29,7 @@ no_index:
 provides:
   Session::Storage::Secure:
     file: lib/Session/Storage/Secure.pm
-    version: 0.002
+    version: 0.003
 requires:
   Carp: 0
   Crypt::CBC: 0
@@ -49,4 +49,4 @@ resources:
   bugtracker: https://github.com/dagolden/session-storage-secure/issues
   homepage: https://metacpan.org/release/Session-Storage-Secure
   repository: git://github.com/dagolden/session-storage-secure.git
-version: 0.002
+version: 0.003
