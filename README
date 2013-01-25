@@ -3,7 +3,7 @@ NAME
     session data with integrity
 
 VERSION
-    version 0.003
+    version 0.004
 
 SYNOPSIS
       my $store = Session::Storage::Secure->new(
@@ -78,7 +78,7 @@ DESCRIPTION
         sk is a secret key shared by all servers
 
     The salt value is generated using Math::Random::ISAAC::XS, seeded from
-    "/dev/urandom", if available, or from rand(), if not.
+    Crypt::URandom.
 
     The HMAC algorithm is "hmac_sha256" from Digest::SHA. Encryption is done
     by Crypt::CBC using Crypt::Rijndael (AES). The ciphertext and MAC's in
