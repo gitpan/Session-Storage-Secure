@@ -35,14 +35,14 @@ my %WriteMakefileArgs = (
     "MIME::Base64" => "3.12",
     "Math::Random::ISAAC::XS" => 0,
     "Moo" => 0,
-    "MooX::Types::MooseLike::Base" => 0,
+    "MooX::Types::MooseLike::Base" => "0.16",
     "Sereal::Decoder" => 0,
     "Sereal::Encoder" => 0,
     "namespace::clean" => 0,
     "strict" => 0,
     "warnings" => 0
   },
-  "VERSION" => "0.005",
+  "VERSION" => "0.006",
   "test" => {
     "TESTS" => "t/*.t"
   }

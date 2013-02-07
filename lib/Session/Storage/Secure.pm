@@ -4,7 +4,7 @@ use warnings;
 
 package Session::Storage::Secure;
 # ABSTRACT: Encrypted, expiring, compressed, serialized session data with integrity
-our $VERSION = '0.005'; # VERSION
+our $VERSION = '0.006'; # VERSION
 
 use Carp                    (qw/croak/);
 use Crypt::CBC              ();
@@ -18,7 +18,7 @@ use Sereal::Decoder ();
 use namespace::clean;
 
 use Moo;
-use MooX::Types::MooseLike::Base qw(:all);
+use MooX::Types::MooseLike::Base 0.16 qw(:all);
 
 #--------------------------------------------------------------------------#
 # Attributes
@@ -154,7 +154,7 @@ Session::Storage::Secure - Encrypted, expiring, compressed, serialized session d
 
 =head1 VERSION
 
-version 0.005
+version 0.006
 
 =head1 SYNOPSIS
 

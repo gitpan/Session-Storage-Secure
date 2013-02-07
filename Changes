@@ -1,5 +1,12 @@
 Revision history for Session-Storage-Secure
 
+0.006     2013-02-06 22:56:45 America/New_York
+
+    [FIXED]
+
+    - Made MooX::Types::MooseLike prereq explicit to try to address
+      prereqs failures by some testers
+
 0.005     2013-02-01 13:55:34 America/New_York
 
     [FIXED]
