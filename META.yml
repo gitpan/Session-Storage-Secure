@@ -3,8 +3,11 @@ abstract: 'Encrypted, expiring, compressed, serialized session data with integri
 author:
   - 'David Golden <dagolden@cpan.org>'
 build_requires:
+  ExtUtils::MakeMaker: 0
   File::Find: 0
+  File::Spec::Functions: 0
   File::Temp: 0
+  List::Util: 0
   Test::Deep: 0
   Test::Fatal: 0
   Test::More: 0.96
@@ -12,7 +15,7 @@ build_requires:
 configure_requires:
   ExtUtils::MakeMaker: 6.30
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 4.300029, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Dist::Zilla version 4.300034, CPAN::Meta::Converter version 2.131490'
 license: apache
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -29,7 +32,7 @@ no_index:
 provides:
   Session::Storage::Secure:
     file: lib/Session/Storage/Secure.pm
-    version: 0.006
+    version: 0.007
 requires:
   Carp: 0
   Crypt::CBC: 0
@@ -42,6 +45,7 @@ requires:
   MooX::Types::MooseLike::Base: 0.16
   Sereal::Decoder: 0
   Sereal::Encoder: 0
+  String::Compare::ConstantTime: 0
   namespace::clean: 0
   perl: 5.008001
   strict: 0
@@ -50,4 +54,4 @@ resources:
   bugtracker: https://github.com/dagolden/session-storage-secure/issues
   homepage: https://metacpan.org/release/Session-Storage-Secure
   repository: git://github.com/dagolden/session-storage-secure.git
-version: 0.006
+version: 0.007
