@@ -85,7 +85,7 @@
    "provides" : {
       "Session::Storage::Secure" : {
          "file" : "lib/Session/Storage/Secure.pm",
-         "version" : "0.008"
+         "version" : "0.009"
       }
    },
    "release_status" : "stable",
@@ -100,7 +100,7 @@
          "web" : "https://github.com/dagolden/Session-Storage-Secure"
       }
    },
-   "version" : "0.008",
+   "version" : "0.009",
    "x_authority" : "cpan:DAGOLDEN",
    "x_contributors" : [
       "Tom Hukins <tom@eborcom.com>"

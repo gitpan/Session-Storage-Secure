@@ -1,5 +1,12 @@
 Revision history for Session-Storage-Secure
 
+0.009     2014-04-17 17:15:25-04:00 America/New_York
+
+    [FIXED]
+
+    - Fixed bug that would cause custom encoding tests to fail
+      intermittently
+
 0.008     2014-04-17 16:29:50-04:00 America/New_York
 
     [ADDED]
