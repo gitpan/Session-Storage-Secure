@@ -4,7 +4,7 @@ use warnings;
 
 package Session::Storage::Secure;
 # ABSTRACT: Encrypted, expiring, compressed, serialized session data with integrity
-our $VERSION = '0.007'; # VERSION
+our $VERSION = '0.008'; # VERSION
 
 use Carp                    (qw/croak/);
 use Crypt::CBC              ();
@@ -12,7 +12,7 @@ use Crypt::Rijndael         ();
 use Crypt::URandom          (qw/urandom/);
 use Digest::SHA             (qw/hmac_sha256/);
 use Math::Random::ISAAC::XS ();
-use MIME::Base64 3.12 (qw/encode_base64url decode_base64url/);
+use MIME::Base64 3.12 ();
 use Sereal::Encoder ();
 use Sereal::Decoder ();
 use String::Compare::ConstantTime qw/equals/;
@@ -25,6 +25,13 @@ use MooX::Types::MooseLike::Base 0.16 qw(:all);
 # Attributes
 #--------------------------------------------------------------------------#
 
+#pod =attr secret_key (required)
+#pod
+#pod This is used to secure the session data.  The encryption and message
+#pod authentication key is derived from this using a one-way function.  Changing it
+#pod will invalidate all sessions.
+#pod
+#pod =cut
 
 has secret_key => (
     is       => 'ro',
@@ -32,11 +39,72 @@ has secret_key => (
     required => 1,
 );
 
+#pod =attr old_secrets
+#pod
+#pod An optional array reference of strings containing old secret keys no longer
+#pod used for encryption but still supported for decrypting session data.
+#pod
+#pod =cut
+
+has old_secrets => (
+    is  => 'ro',
+    isa => ArrayRef [Str],
+);
+
+#pod =attr default_duration
+#pod
+#pod Number of seconds for which the session may be considered valid.  If an
+#pod expiration is not provided to C<encode>, this is used instead to expire the
+#pod session after a period of time.  It is unset by default, meaning that sessions
+#pod expiration is not capped.
+#pod
+#pod =cut
 
 has default_duration => (
     is        => 'ro',
     isa       => Int,
     predicate => 1,
+);
+
+#pod =attr transport_encoder
+#pod
+#pod A code reference to convert binary data elements (the encrypted data and the
+#pod MAC) into a transport-safe form.  Defaults to
+#pod L<MIME::Base64::encode_base64url|MIME::Base64>.  The output must not include
+#pod the C<separator> attribute used to delimit fields.
+#pod
+#pod =cut
+
+has transport_encoder => (
+    is      => 'ro',
+    isa     => CodeRef,
+    default => sub { \&MIME::Base64::encode_base64url },
+);
+
+#pod =attr transport_decoder
+#pod
+#pod A code reference to extract binary data (the encrypted data and the
+#pod MAC) from a transport-safe form.  It must be the complement to C<encode>.
+#pod Defaults to L<MIME::Base64::decode_base64url|MIME::Base64>.
+#pod
+#pod =cut
+
+has transport_decoder => (
+    is      => 'ro',
+    isa     => CodeRef,
+    default => sub { \&MIME::Base64::decode_base64url },
+);
+
+#pod =attr separator
+#pod
+#pod A character used to separate fields.  It defaults to C<~>.
+#pod
+#pod =cut
+
+has separator => (
+    is      => 'ro',
+    isa     => Str,
+    default => '~',
 );
 
 has _encoder => (
@@ -82,10 +150,31 @@ sub _build__rng {
     return Math::Random::ISAAC::XS->new( map { unpack( "N", urandom(4) ) } 1 .. 256 );
 }
 
+#pod =method encode
+#pod
+#pod   my $string = $store->encode( $data, $expires );
+#pod
+#pod The C<$data> argument should be a reference to a data structure.  It must not
+#pod contain objects. If it is undefined, an empty hash reference will be encoded
+#pod instead.
+#pod
+#pod The optional C<$expires> argument should be the session expiration time
+#pod expressed as epoch seconds.  If the C<$expires> time is in the past, the
+#pod C<$data> argument is cleared and an empty hash reference is encoded and returned.
+#pod If no C<$expires> is given, then if the C<default_duration> attribute is set, it
+#pod will be used to calculate an expiration time.
+#pod
+#pod The method returns a string that securely encodes the session data.  All binary
+#pod components are protected via the L</transport_encoder> attribute.
+#pod
+#pod An exception is thrown on any errors.
+#pod
+#pod =cut
 
 sub encode {
     my ( $self, $data, $expires ) = @_;
     $data = {} unless defined $data;
+    my $sep = $self->separator;
 
     # If expiration is set, we want to check it and possibly clear data;
     # if not set, we might add an expiration based on default_duration
@@ -103,38 +192,66 @@ sub encode {
     my $cbc = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael' );
     my ( $ciphertext, $mac );
     eval {
-        $ciphertext = encode_base64url( $cbc->encrypt( $self->_freeze($data) ) );
-        $mac = encode_base64url( hmac_sha256( "$expires~$ciphertext", $key ) );
+        $ciphertext = $self->transport_encoder->( $cbc->encrypt( $self->_freeze($data) ) );
+        $mac = $self->transport_encoder->( hmac_sha256( "$expires$sep$ciphertext", $key ) );
     };
     croak "Encoding error: $@" if $@;
 
-    return join( "~", $salt, $expires, $ciphertext, $mac );
+    return join( $sep, $salt, $expires, $ciphertext, $mac );
 }
 
+#pod =method decode
+#pod
+#pod   my $data = $store->decode( $string );
+#pod
+#pod The C<$string> argument must be the output of C<encode>.
+#pod
+#pod If the message integrity check fails or if expiration exists and is in
+#pod the past, the method returns undef or an empty list (depending on context).
+#pod
+#pod An exception is thrown on any errors.
+#pod
+#pod =cut
 
 sub decode {
     my ( $self, $string ) = @_;
     return unless length $string;
 
     # Having a string implies at least salt; expires is optional; rest required
-    my ( $salt, $expires, $ciphertext, $mac ) = split qr/~/, $string;
+    my $sep = $self->separator;
+    my ( $salt, $expires, $ciphertext, $mac ) = split qr/\Q$sep\E/, $string;
     return unless defined($ciphertext) && length($ciphertext);
     return unless defined($mac)        && length($mac);
 
-    # Check MAC integrity and expiration
-    my $key = hmac_sha256( $salt, $self->secret_key );
-    my $check_mac =
-      eval { encode_base64url( hmac_sha256( "$expires~$ciphertext", $key ) ) };
-    return
-         unless defined($check_mac)
-      && length($check_mac)
-      && equals( $check_mac, $mac ); # constant time comparision
+    # Try to decode against all known secret keys
+    my @secrets = ( $self->secret_key, @{ $self->old_secrets || [] } );
+    my $key;
+    CHECK: foreach my $secret (@secrets) {
+        $key = hmac_sha256( $salt, $secret );
+        my $check_mac = eval {
+            $self->transport_encoder->( hmac_sha256( "$expires$sep$ciphertext", $key ) );
+        };
+        last CHECK
+          if (
+               defined($check_mac)
+            && length($check_mac)
+            && equals( $check_mac, $mac ) # constant time comparison
+          );
+        undef $key;
+    }
+
+    # Check MAC integrity
+    return unless defined($key);
+
+    # Check expiration
     return if length($expires) && $expires < time;
 
     # Decrypt and deserialize the data
     my $cbc = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael' );
     my $data;
-    eval { $self->_thaw( $cbc->decrypt( decode_base64url($ciphertext) ), $data ) };
+    eval {
+        $self->_thaw( $cbc->decrypt( $self->transport_decoder->($ciphertext) ), $data );
+    };
     croak "Decoding error: $@" if $@;
 
     return $data;
@@ -149,7 +266,7 @@ __END__
 
 =pod
 
-=encoding utf-8
+=encoding UTF-8
 
 =head1 NAME
 
@@ -157,7 +274,7 @@ Session::Storage::Secure - Encrypted, expiring, compressed, serialized session d
 
 =head1 VERSION
 
-version 0.007
+version 0.008
 
 =head1 SYNOPSIS
 
@@ -259,12 +376,34 @@ This is used to secure the session data.  The encryption and message
 authentication key is derived from this using a one-way function.  Changing it
 will invalidate all sessions.
 
+=head2 old_secrets
+
+An optional array reference of strings containing old secret keys no longer
+used for encryption but still supported for decrypting session data.
+
 =head2 default_duration
 
 Number of seconds for which the session may be considered valid.  If an
 expiration is not provided to C<encode>, this is used instead to expire the
 session after a period of time.  It is unset by default, meaning that sessions
 expiration is not capped.
+
+=head2 transport_encoder
+
+A code reference to convert binary data elements (the encrypted data and the
+MAC) into a transport-safe form.  Defaults to
+L<MIME::Base64::encode_base64url|MIME::Base64>.  The output must not include
+the C<separator> attribute used to delimit fields.
+
+=head2 transport_decoder
+
+A code reference to extract binary data (the encrypted data and the
+MAC) from a transport-safe form.  It must be the complement to C<encode>.
+Defaults to L<MIME::Base64::decode_base64url|MIME::Base64>.
+
+=head2 separator
+
+A character used to separate fields.  It defaults to C<~>.
 
 =head1 METHODS
 
@@ -283,7 +422,7 @@ If no C<$expires> is given, then if the C<default_duration> attribute is set, it
 will be used to calculate an expiration time.
 
 The method returns a string that securely encodes the session data.  All binary
-components are base64 encoded.
+components are protected via the L</transport_encoder> attribute.
 
 An exception is thrown on any errors.
 
@@ -298,15 +437,17 @@ the past, the method returns undef or an empty list (depending on context).
 
 An exception is thrown on any errors.
 
-=for Pod::Coverage method_names_here
+=for Pod::Coverage has_default_duration
 
 =head1 LIMITATIONS
 
 =head2 Secret key
 
 You must protect the secret key, of course.  Rekeying periodically would
-improve security.  Rekeying also invalidates all existing sessions.  In a
-multi-node application, all nodes must share the same secret key.
+improve security.  Rekeying also invalidates all existing sessions unless the
+C<old_secrets> attribute contains old encryption keys still used for
+decryption.  In a multi-node application, all nodes must share the same secret
+key.
 
 =head2 Session size
 
@@ -481,7 +622,7 @@ L<Data::Serializer>
 =head2 Bugs / Feature Requests
 
 Please report any bugs or feature requests through the issue tracker
-at L<https://github.com/dagolden/session-storage-secure/issues>.
+at L<https://github.com/dagolden/Session-Storage-Secure/issues>.
 You will be notified automatically of any progress on your issue.
 
 =head2 Source Code
@@ -489,13 +630,17 @@ You will be notified automatically of any progress on your issue.
 This is open source software.  The code repository is available for
 public review and contribution under the terms of the license.
 
-L<https://github.com/dagolden/session-storage-secure>
+L<https://github.com/dagolden/Session-Storage-Secure>
 
-  git clone git://github.com/dagolden/session-storage-secure.git
+  git clone https://github.com/dagolden/Session-Storage-Secure.git
 
 =head1 AUTHOR
 
 David Golden <dagolden@cpan.org>
+
+=head1 CONTRIBUTOR
+
+Tom Hukins <tom@eborcom.com>
 
 =head1 COPYRIGHT AND LICENSE
 

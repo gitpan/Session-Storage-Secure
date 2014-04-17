@@ -3,7 +3,7 @@ NAME
     session data with integrity
 
 VERSION
-    version 0.007
+    version 0.008
 
 SYNOPSIS
       my $store = Session::Storage::Secure->new(
@@ -93,11 +93,30 @@ ATTRIBUTES
     authentication key is derived from this using a one-way function.
     Changing it will invalidate all sessions.
 
+  old_secrets
+    An optional array reference of strings containing old secret keys no
+    longer used for encryption but still supported for decrypting session
+    data.
+
   default_duration
     Number of seconds for which the session may be considered valid. If an
     expiration is not provided to "encode", this is used instead to expire
     the session after a period of time. It is unset by default, meaning that
     sessions expiration is not capped.
+
+  transport_encoder
+    A code reference to convert binary data elements (the encrypted data and
+    the MAC) into a transport-safe form. Defaults to
+    MIME::Base64::encode_base64url. The output must not include the
+    "separator" attribute used to delimit fields.
+
+  transport_decoder
+    A code reference to extract binary data (the encrypted data and the MAC)
+    from a transport-safe form. It must be the complement to "encode".
+    Defaults to MIME::Base64::decode_base64url.
+
+  separator
+    A character used to separate fields. It defaults to "~".
 
 METHODS
   encode
@@ -114,7 +133,7 @@ METHODS
     attribute is set, it will be used to calculate an expiration time.
 
     The method returns a string that securely encodes the session data. All
-    binary components are base64 encoded.
+    binary components are protected via the "transport_encoder" attribute.
 
     An exception is thrown on any errors.
 
@@ -132,8 +151,10 @@ METHODS
 LIMITATIONS
   Secret key
     You must protect the secret key, of course. Rekeying periodically would
-    improve security. Rekeying also invalidates all existing sessions. In a
-    multi-node application, all nodes must share the same secret key.
+    improve security. Rekeying also invalidates all existing sessions unless
+    the "old_secrets" attribute contains old encryption keys still used for
+    decryption. In a multi-node application, all nodes must share the same
+    secret key.
 
   Session size
     If storing the encoded session in a cookie, keep in mind that cookies
@@ -272,19 +293,22 @@ SEE ALSO
 SUPPORT
   Bugs / Feature Requests
     Please report any bugs or feature requests through the issue tracker at
-    <https://github.com/dagolden/session-storage-secure/issues>. You will be
+    <https://github.com/dagolden/Session-Storage-Secure/issues>. You will be
     notified automatically of any progress on your issue.
 
   Source Code
     This is open source software. The code repository is available for
     public review and contribution under the terms of the license.
 
-    <https://github.com/dagolden/session-storage-secure>
+    <https://github.com/dagolden/Session-Storage-Secure>
 
-      git clone git://github.com/dagolden/session-storage-secure.git
+      git clone https://github.com/dagolden/Session-Storage-Secure.git
 
 AUTHOR
     David Golden <dagolden@cpan.org>
+
+CONTRIBUTOR
+    Tom Hukins <tom@eborcom.com>
 
 COPYRIGHT AND LICENSE
     This software is Copyright (c) 2013 by David Golden.

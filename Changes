@@ -1,5 +1,19 @@
 Revision history for Session-Storage-Secure
 
+0.008     2014-04-17 16:29:50-04:00 America/New_York
+
+    [ADDED]
+
+    - Added support for keeping an array of old keys for decryption
+      (Tom Hukins)
+
+    - Added support for replacing MIME::Base64 encoding with user-specified
+      transport encoding/decoding, possibly with a custom separator
+
+    [INTERNAL]
+
+    - Update repository support and meta files
+
 0.007     2013-05-31 23:30:44 America/New_York
 
     [FIXED]
