@@ -13,6 +13,7 @@ lib/Session/Storage/Secure.pm
 perlcritic.rc
 t/00-report-prereqs.t
 t/basic.t
+t/encoding.t
 t/errors.t
 tidyall.ini
 xt/author/00-compile.t

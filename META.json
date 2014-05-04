@@ -4,7 +4,7 @@
       "David Golden <dagolden@cpan.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 5.015, CPAN::Meta::Converter version 2.140640",
+   "generated_by" : "Dist::Zilla version 5.015, CPAN::Meta::Converter version 2.141170",
    "license" : [
       "apache_2_0"
    ],
@@ -85,7 +85,7 @@
    "provides" : {
       "Session::Storage::Secure" : {
          "file" : "lib/Session/Storage/Secure.pm",
-         "version" : "0.009"
+         "version" : "0.010"
       }
    },
    "release_status" : "stable",
@@ -100,7 +100,7 @@
          "web" : "https://github.com/dagolden/Session-Storage-Secure"
       }
    },
-   "version" : "0.009",
+   "version" : "0.010",
    "x_authority" : "cpan:DAGOLDEN",
    "x_contributors" : [
       "Tom Hukins <tom@eborcom.com>"

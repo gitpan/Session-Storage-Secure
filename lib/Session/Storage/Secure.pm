@@ -4,7 +4,7 @@ use warnings;
 
 package Session::Storage::Secure;
 # ABSTRACT: Encrypted, expiring, compressed, serialized session data with integrity
-our $VERSION = '0.009'; # VERSION
+our $VERSION = '0.010'; # VERSION
 
 use Carp                    (qw/croak/);
 use Crypt::CBC              ();
@@ -39,6 +39,21 @@ has secret_key => (
     required => 1,
 );
 
+#pod =attr default_duration
+#pod
+#pod Number of seconds for which the session may be considered valid.  If an
+#pod expiration is not provided to C<encode>, this is used instead to expire the
+#pod session after a period of time.  It is unset by default, meaning that session
+#pod expiration is not capped.
+#pod
+#pod =cut
+
+has default_duration => (
+    is        => 'ro',
+    isa       => Int,
+    predicate => 1,
+);
+
 #pod =attr old_secrets
 #pod
 #pod An optional array reference of strings containing old secret keys no longer
@@ -51,19 +66,42 @@ has old_secrets => (
     isa => ArrayRef [Str],
 );
 
-#pod =attr default_duration
+#pod =attr separator
 #pod
-#pod Number of seconds for which the session may be considered valid.  If an
-#pod expiration is not provided to C<encode>, this is used instead to expire the
-#pod session after a period of time.  It is unset by default, meaning that sessions
-#pod expiration is not capped.
+#pod A character used to separate fields.  It defaults to C<~>.
 #pod
 #pod =cut
 
-has default_duration => (
-    is        => 'ro',
-    isa       => Int,
-    predicate => 1,
+has separator => (
+    is      => 'ro',
+    isa     => Str,
+    default => '~',
+);
+
+#pod =attr sereal_encoder_options
+#pod
+#pod A hash reference with constructor arguments for L<Sereal::Encoder>. Defaults
+#pod to C<< { snappy => 1, croak_on_bless => 1 } >>.
+#pod
+#pod =cut
+
+has sereal_encoder_options => (
+    is      => 'ro',
+    isa     => HashRef,
+    default => sub { { snappy => 1, croak_on_bless => 1 } },
+);
+
+#pod =attr sereal_decoder_options
+#pod
+#pod A hash reference with constructor arguments for L<Sereal::Decoder>. Defaults
+#pod to C<< { refuse_objects => 1, validate_utf8  => 1 } >>.
+#pod
+#pod =cut
+
+has sereal_decoder_options => (
+    is      => 'ro',
+    isa     => HashRef,
+    default => sub { { refuse_objects => 1, validate_utf8 => 1 } },
 );
 
 #pod =attr transport_encoder
@@ -95,18 +133,6 @@ has transport_decoder => (
     default => sub { \&MIME::Base64::decode_base64url },
 );
 
-#pod =attr separator
-#pod
-#pod A character used to separate fields.  It defaults to C<~>.
-#pod
-#pod =cut
-
-has separator => (
-    is      => 'ro',
-    isa     => Str,
-    default => '~',
-);
-
 has _encoder => (
     is      => 'lazy',
     isa     => InstanceOf ['Sereal::Encoder'],
@@ -115,12 +141,7 @@ has _encoder => (
 
 sub _build__encoder {
     my ($self) = @_;
-    return Sereal::Encoder->new(
-        {
-            snappy         => 1,
-            croak_on_bless => 1,
-        }
-    );
+    return Sereal::Encoder->new( $self->sereal_encoder_options );
 }
 
 has _decoder => (
@@ -131,12 +152,7 @@ has _decoder => (
 
 sub _build__decoder {
     my ($self) = @_;
-    return Sereal::Decoder->new(
-        {
-            refuse_objects => 1,
-            validate_utf8  => 1,
-        }
-    );
+    return Sereal::Decoder->new( $self->sereal_decoder_options );
 }
 
 has _rng => (
@@ -154,9 +170,10 @@ sub _build__rng {
 #pod
 #pod   my $string = $store->encode( $data, $expires );
 #pod
-#pod The C<$data> argument should be a reference to a data structure.  It must not
-#pod contain objects. If it is undefined, an empty hash reference will be encoded
-#pod instead.
+#pod The C<$data> argument should be a reference to a data structure.  By default,
+#pod it must not contain objects.  (See L</Objects not stored by default> for
+#pod rationale and alternatives.) If it is undefined, an empty hash reference will
+#pod be encoded instead.
 #pod
 #pod The optional C<$expires> argument should be the session expiration time
 #pod expressed as epoch seconds.  If the C<$expires> time is in the past, the
@@ -274,7 +291,7 @@ Session::Storage::Secure - Encrypted, expiring, compressed, serialized session d
 
 =head1 VERSION
 
-version 0.009
+version 0.010
 
 =head1 SYNOPSIS
 
@@ -335,16 +352,16 @@ may happen prior to the application server), we omit C<ssl-key>.  This
 weakens protection against replay attacks if an attacker can break
 the SSL session key and intercept messages.
 
-Using C<user> and C<expiration> to generate the encryption and MAC keys
-was a method proposed to ensure unique keys to defeat volume attacks
-against the secret key.  Rather than rely on those for uniqueness, which
-also reveals user name and prohibits anonymous sessions, we replace
-C<user> with a cryptographically-strong random salt value.
+Using C<user> and C<expiration> to generate the encryption and MAC keys was a
+method proposed to ensure unique keys to defeat volume attacks against the
+secret key.  Rather than rely on those for uniqueness (with the unfortunate
+side effect of revealing user names and prohibiting anonymous sessions), we
+replace C<user> with a cryptographically-strong random salt value.
 
-The original proposal also calculates a MAC based on unencrypted
-data.  We instead calculate the MAC based on the encrypted data.  This
-avoids the extra step of decrypting invalid messages.  Because the
-salt is already encoded into the key, we omit it from the MAC input.
+The original proposal also calculates a MAC based on unencrypted data.  We
+instead calculate the MAC based on the encrypted data.  This avoids an extra
+step decrypting invalid messages.  Because the salt is already encoded into the
+key, we omit it from the MAC input.
 
 Therefore, the session storage protocol used by this module is as follows:
 
@@ -363,7 +380,7 @@ L<Crypt::URandom>.
 
 The HMAC algorithm is C<hmac_sha256> from L<Digest::SHA>.  Encryption
 is done by L<Crypt::CBC> using L<Crypt::Rijndael> (AES).  The ciphertext and
-MAC's in the cookie are Base64 encoded by L<MIME::Base64>.
+MAC's in the cookie are Base64 encoded by L<MIME::Base64> by default.
 
 During session retrieval, if the MAC does not authenticate or if the expiration
 is set and in the past, the session will be discarded.
@@ -376,17 +393,31 @@ This is used to secure the session data.  The encryption and message
 authentication key is derived from this using a one-way function.  Changing it
 will invalidate all sessions.
 
+=head2 default_duration
+
+Number of seconds for which the session may be considered valid.  If an
+expiration is not provided to C<encode>, this is used instead to expire the
+session after a period of time.  It is unset by default, meaning that session
+expiration is not capped.
+
 =head2 old_secrets
 
 An optional array reference of strings containing old secret keys no longer
 used for encryption but still supported for decrypting session data.
 
-=head2 default_duration
+=head2 separator
 
-Number of seconds for which the session may be considered valid.  If an
-expiration is not provided to C<encode>, this is used instead to expire the
-session after a period of time.  It is unset by default, meaning that sessions
-expiration is not capped.
+A character used to separate fields.  It defaults to C<~>.
+
+=head2 sereal_encoder_options
+
+A hash reference with constructor arguments for L<Sereal::Encoder>. Defaults
+to C<< { snappy => 1, croak_on_bless => 1 } >>.
+
+=head2 sereal_decoder_options
+
+A hash reference with constructor arguments for L<Sereal::Decoder>. Defaults
+to C<< { refuse_objects => 1, validate_utf8  => 1 } >>.
 
 =head2 transport_encoder
 
@@ -401,19 +432,16 @@ A code reference to extract binary data (the encrypted data and the
 MAC) from a transport-safe form.  It must be the complement to C<encode>.
 Defaults to L<MIME::Base64::decode_base64url|MIME::Base64>.
 
-=head2 separator
-
-A character used to separate fields.  It defaults to C<~>.
-
 =head1 METHODS
 
 =head2 encode
 
   my $string = $store->encode( $data, $expires );
 
-The C<$data> argument should be a reference to a data structure.  It must not
-contain objects. If it is undefined, an empty hash reference will be encoded
-instead.
+The C<$data> argument should be a reference to a data structure.  By default,
+it must not contain objects.  (See L</Objects not stored by default> for
+rationale and alternatives.) If it is undefined, an empty hash reference will
+be encoded instead.
 
 The optional C<$expires> argument should be the session expiration time
 expressed as epoch seconds.  If the C<$expires> time is in the past, the
@@ -463,12 +491,18 @@ However, nothing prevents the encoded output from exceeding 4k.  Applications
 must check for this condition and handle it appropriately with an error or
 by splitting the value across multiple cookies.
 
-=head2 Objects not stored
+=head2 Objects not stored by default
 
-Session data may not include objects.  Sereal is configured to die if objects
-are encountered because object serialization/deserialiation can have
-undesirable side effects.  Applications should take steps to deflate/inflate
-objects before storing them in session data.
+The default Sereal options do not allow storing objects because object
+deserialization can have undesirable side effects, including potentially fatal
+errors if a class is not available at deserialization time or if internal class
+structures changed from when the session data was serialized to when it was
+deserialized.  Applications should take steps to deflate/inflate objects before
+storing them in session data.
+
+Alternatively, applications can change L</sereal_encoder_options> and
+L</sereal_decoder_options> to allow object serialization or other object
+transformations and accept the risks of doing so.
 
 =head1 SECURITY
 
